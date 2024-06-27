@@ -8,28 +8,29 @@ logger = logging.getLogger(__name__)
 
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: Dict[str, List[WebSocket]] = {}
-        logger.info("ConnectionManager initialized")
+        self.active_connections = {}  # Dictionary of dictionaries, keyed by lobby_id then player_name
 
-    async def connect(self, websocket: WebSocket, lobby_id: str):
+    async def connect(self, websocket: WebSocket, lobby_id: str, player_name: str):
+        await websocket.accept()
         if lobby_id not in self.active_connections:
-            self.active_connections[lobby_id] = []
-        self.active_connections[lobby_id].append(websocket)
-        logger.info(f"Added connection to lobby {lobby_id}. Total connections: {len(self.active_connections[lobby_id])}")
+            self.active_connections[lobby_id] = {}
+        self.active_connections[lobby_id][player_name] = websocket
 
-    async def disconnect(self, websocket: WebSocket, lobby_id: str):
-        if lobby_id in self.active_connections:
-            self.active_connections[lobby_id].remove(websocket)
-            logger.info(f"Removed connection from lobby {lobby_id}. Remaining connections: {len(self.active_connections[lobby_id])}")
+    async def disconnect(self, lobby_id: str, player_name: str):
+        if lobby_id in self.active_connections and player_name in self.active_connections[lobby_id]:
+            del self.active_connections[lobby_id][player_name]
             if not self.active_connections[lobby_id]:
                 del self.active_connections[lobby_id]
-                logger.info(f"Lobby {lobby_id} is now empty and has been removed")
 
-    async def broadcast_to_lobby(self, lobby_id: str, message: str, exclude: WebSocket = None):
+    async def send_personal_message(self, message: str, lobby_id: str, player_name: str):
+        if lobby_id in self.active_connections and player_name in self.active_connections[lobby_id]:
+            await self.active_connections[lobby_id][player_name].send_text(message)
+
+    async def broadcast_to_lobby(self, message: str, lobby_id: str, exclude: str = None):
         if lobby_id in self.active_connections:
-            for connection in self.active_connections[lobby_id]:
-                if connection != exclude:
-                    try:
-                        await connection.send_text(message)
-                    except Exception as e:
-                        logger.error(f"Failed to send message to a connection in lobby {lobby_id}: {str(e)}")
+            for player_name, connection in self.active_connections[lobby_id].items():
+                if player_name != exclude:
+                    await connection.send_text(message)
+
+    def get_lobby_player_count(self, lobby_id: str):
+        return len(self.active_connections.get(lobby_id, {}))

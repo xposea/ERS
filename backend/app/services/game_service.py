@@ -9,9 +9,9 @@ class GameService:
         self.last_play_time = {}
 
     def create_lobby(self, lobby_id):
-        if lobby_id not in self.lobbies:
+        if lobby_id not in self.games:
             self.lobbies[lobby_id] = set()
-        return lobby_id
+        return self.lobbies[lobby_id]
 
     def join_lobby(self, lobby_id, player_name):
         if lobby_id not in self.lobbies:
@@ -33,6 +33,8 @@ class GameService:
 
     def play_turn(self, lobby_id, player_name):
         game = self.games.get(lobby_id)
+        if game.is_game_over():
+            return True, "game_over", game.current_player.name
         if game and game.current_player.name == player_name:
             try:
                 winner = game.play_turn()
@@ -69,6 +71,26 @@ class GameService:
                 "players": [{"name": p.name, "card_count": p.card_count()} for p in game.players]
             }
         return {}
+
+    def get_game(self, lobby_id):
+        if lobby_id not in self.games:
+            raise ValueError(f"No active game for lobby {lobby_id}")
+        return self.games[lobby_id]
+
+    def list_lobbies(self):
+        return [
+            {
+                "id": lobby_id,
+                "player_count": len(players)
+            }
+            for lobby_id, players in self.lobbies.items()
+        ]
+
+    def end_game(self, lobby_id):
+        if lobby_id in self.games:
+            del self.games[lobby_id]
+        if lobby_id in self.last_play_time:
+            del self.last_play_time[lobby_id]
 
     # def remove_player(self, lobby_id, player_name):
     #     if lobby_id in self.lobbies:

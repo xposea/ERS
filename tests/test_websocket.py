@@ -46,15 +46,15 @@ async def player_actions(uri, player_name):
                         # It's this player's turn, so play a card
                         await asyncio.sleep(0.5)  # Random delay
                         await websocket.send(json.dumps({"type": "play"}))
-                        logger.info(f"{player_name} played a card")
+                        # logger.info(f"{player_name} played a card")
                 elif response_data['type'] == 'slap_opportunity':
                     # Decide whether to slap (you can adjust this probability)
                     if random.random() < 0.5:  # 50% chance to slap
                         await asyncio.sleep(random.uniform(0.1, 0.2))  # Random delay
                         await websocket.send(json.dumps({"type": "slap"}))
-                        logger.info(f"{player_name} attempted to slap")
-                    else:
-                        logger.info(f"{player_name} decided not to slap")
+                        # logger.info(f"{player_name} attempted to slap")
+                    # else:
+                        # logger.info(f"{player_name} decided not to slap")
                 elif response_data['type'] == 'game_over':
                     logger.info(f"Game is over. Winner is {response_data['winner']}.")
                     break
@@ -84,16 +84,26 @@ async def start_game(uri):
             logger.error("Start game: WebSocket connection closed")
 
 
-async def game_session(lobby_id, num_players=2):
+async def game_session(lobby_id, players):
     if not await check_server_health():
         logger.error("Server is not healthy. Aborting game session.")
         return
 
-    player_tasks = [player_actions(f"ws://localhost:8000/ws/{lobby_id}/player{i}", f"player{i}") for i in
-                    range(1, num_players + 1)]
+    player_tasks = [player_actions(f"ws://localhost:8000/ws/{lobby_id}/{i}", f"{i}") for i in
+                    players]
     start_game_task = start_game(f"ws://localhost:8000/ws/{lobby_id}/starter")
     await asyncio.gather(start_game_task, *player_tasks)
 
 
-if __name__ == "__main__":
-    asyncio.run(game_session("test_lobby", 2))  # Start a game with 3 players
+async def multiple_games():
+
+    session1 = asyncio.create_task(game_session("test_lobby", ['p1', 'p2']))  # Start a game with 3 players
+    session2 = asyncio.create_task(game_session("test_lobby2", ['p3', 'p4']))
+    await asyncio.gather(session1, session2)
+
+
+if __name__ == '__main__':
+    asyncio.run(multiple_games())
+
+
+# TODO Player disconnecting when waiting too long. Fix game over but other player keeps going.
