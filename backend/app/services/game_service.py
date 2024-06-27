@@ -63,13 +63,10 @@ class GameService:
     def get_state(self, lobby_id):
         game = self.games.get(lobby_id)
         if game:
-            winner = game.get_winner()
             return {
                 "current_player": game.current_player.name,
                 "pile_count": len(game.pile),
-                "players": [{"name": p.name, "card_count": p.card_count()} for p in game.players],
-                "is_game_over": game.is_game_over(),
-                "winner": winner.name if winner else None
+                "players": [{"name": p.name, "card_count": p.card_count()} for p in game.players]
             }
         return {}
 

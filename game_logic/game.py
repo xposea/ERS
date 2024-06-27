@@ -24,6 +24,8 @@ class ERSGame:
                     player.add_card(self.deck.cards.pop())
 
     def play_turn(self):
+        if self.is_game_over():
+            return self.get_winner()
         player = self.current_player
         if player.has_cards():
             card = player.play_card()
@@ -43,9 +45,6 @@ class ERSGame:
             self.pile = []
             self.current_player_index = self.players.index(self.face_card_player)
             self.face_card_player = None
-
-        if self.is_game_over():
-            return self.get_winner()
         return None
 
     def handle_face_card(self, player, card):

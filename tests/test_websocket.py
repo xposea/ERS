@@ -5,6 +5,7 @@ import logging
 import aiohttp
 import random
 
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ async def player_actions(uri, player_name):
         game_started = False
         while True:
             try:
-                response = await asyncio.wait_for(websocket.recv(), timeout=30.0)
+                response = await asyncio.wait_for(websocket.recv(), timeout=60.0)
                 logger.info(f"{player_name} received: {response}")
                 response_data = json.loads(response)
 
@@ -47,18 +48,25 @@ async def player_actions(uri, player_name):
                         await websocket.send(json.dumps({"type": "play"}))
                         logger.info(f"{player_name} played a card")
                 elif response_data['type'] == 'slap_opportunity':
-                    # Attempt to slap
-                    await asyncio.sleep(random.uniform(0.1, 0.2))  # Random delay
-                    await websocket.send(json.dumps({"type": "slap"}))
-                    logger.info(f"{player_name} attempted to slap")
+                    # Decide whether to slap (you can adjust this probability)
+                    if random.random() < 0.5:  # 50% chance to slap
+                        await asyncio.sleep(random.uniform(0.1, 0.2))  # Random delay
+                        await websocket.send(json.dumps({"type": "slap"}))
+                        logger.info(f"{player_name} attempted to slap")
+                    else:
+                        logger.info(f"{player_name} decided not to slap")
                 elif response_data['type'] == 'game_over':
                     logger.info(f"Game is over. Winner is {response_data['winner']}.")
                     break
+                # Add more elif conditions for other message types if needed
+
             except asyncio.TimeoutError:
-                logger.warning(f"{player_name}: No response from server for 30 seconds")
+                logger.warning(f"{player_name}: No response from server for 60 seconds")
             except websockets.exceptions.ConnectionClosed as e:
                 logger.error(f"{player_name}: WebSocket connection closed: {e}")
                 break
+
+    logger.info(f"{player_name} disconnected from lobby")
 
 
 async def start_game(uri):
