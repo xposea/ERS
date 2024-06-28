@@ -7,35 +7,42 @@ class GameService:
         self.lobbies = {}
         self.games = {}
         self.last_play_time = {}
+        self.lobby_creators = {}  # New field to track lobby creators
 
-    def create_lobby(self, lobby_id):
-        if lobby_id not in self.games:
+    def create_lobby(self, lobby_id, creator_name):
+        if lobby_id not in self.lobbies:
             self.lobbies[lobby_id] = set()
+            self.lobby_creators[lobby_id] = creator_name
+            self.lobbies[lobby_id].add(creator_name)
+        else:
+            self.join_lobby(lobby_id, creator_name)
         return self.lobbies[lobby_id]
 
-    def join_lobby(self, lobby_id, player_name):
-        if lobby_id not in self.lobbies:
-            self.create_lobby(lobby_id)
-        self.lobbies[lobby_id].add(player_name)
-        return len(self.lobbies[lobby_id])
-
-    def start_game(self, lobby_id):
+    def start_game(self, lobby_id, player_name):
         if lobby_id in self.lobbies and len(self.lobbies[lobby_id]) >= 2:
+            if player_name != self.lobby_creators.get(lobby_id):
+                return None, "Only the lobby creator can start the game"
             players = list(self.lobbies[lobby_id])
             game = ERSGame(players)
             game.start_game()
             self.games[lobby_id] = game
             del self.lobbies[lobby_id]
+            del self.lobby_creators[lobby_id]
             self.last_play_time[lobby_id] = time.time()
-            print(players)
             return game, None
         return None, "Not enough players to start the game"
+
+    def join_lobby(self, lobby_id, player_name):
+        if lobby_id not in self.lobbies:
+            self.create_lobby(lobby_id, player_name)
+        self.lobbies[lobby_id].add(player_name)
+        return len(self.lobbies[lobby_id])
 
     def play_turn(self, lobby_id, player_name):
         game = self.games.get(lobby_id)
         if game.is_game_over():
             return True, "game_over", game.current_player.name
-        if game and game.current_player.name == player_name:
+        elif game and game.current_player.name == player_name:
             try:
                 winner = game.play_turn()
                 self.last_play_time[lobby_id] = time.time()
@@ -45,7 +52,7 @@ class GameService:
             except Exception as e:
                 print(f"Error during play_turn: {str(e)}")
                 return False, "error", str(e)
-        return False, "invalid_turn", None
+        return False, "invalid_turn", "Playing out of turn?"
 
     def attempt_slap(self, lobby_id, player_name):
         game = self.games.get(lobby_id)

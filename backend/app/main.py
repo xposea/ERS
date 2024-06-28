@@ -5,7 +5,6 @@ from starlette.websockets import WebSocketState
 from .utils.helpers import ConnectionManager
 from .services.game_service import GameService
 import json
-# import traceback
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -24,7 +23,7 @@ game_service = GameService()
 
 async def send_error(websocket: WebSocket, message: str):
     if websocket.client_state == WebSocketState.CONNECTED:
-        await websocket.send_json({"type": "error", "message": message})
+        await websocket.send_json({"type": "error", "logging": 1, "message": message})
 
 
 @app.websocket("/ws/{lobby_id}/{player_name}")
@@ -35,16 +34,40 @@ async def websocket_endpoint(websocket: WebSocket, lobby_id: str, player_name: s
             data = await websocket.receive_text()
             action = json.loads(data)
 
-            if action['type'] == 'join_lobby':
-                player_count = game_service.join_lobby(lobby_id, player_name)
-                await manager.broadcast_to_lobby(json.dumps({
-                    "type": "player_joined",
-                    "player": player_name,
-                    "player_count": player_count
-                }), lobby_id)
+            if action['type'] == 'create_lobby':
+                if lobby_id in game_service.lobbies:
+                    player_count = game_service.join_lobby(lobby_id, player_name)
+                    await manager.broadcast_to_lobby(json.dumps({
+                        "type": "player_joined",
+                        "player": player_name,
+                        "player_count": player_count,
+                        "comment": "lobby already exists"
+                    }), lobby_id)
+                else:
+                    game_service.create_lobby(lobby_id, player_name)
+                    await manager.send_personal_message(json.dumps({
+                        "type": "lobby_created",
+                        "message": "You are the lobby creator"
+                    }), lobby_id, player_name)
+
+            elif action['type'] == 'join_lobby':
+                if lobby_id not in game_service.lobbies:
+                    game_service.create_lobby(lobby_id, player_name)
+                    await manager.send_personal_message(json.dumps({
+                        "type": "lobby_created",
+                        "message": "You are the lobby creator",
+                        "comment": "Lobby did not exist and was created"
+                    }), lobby_id, player_name)
+                else:
+                    player_count = game_service.join_lobby(lobby_id, player_name)
+                    await manager.broadcast_to_lobby(json.dumps({
+                        "type": "player_joined",
+                        "player": player_name,
+                        "player_count": player_count
+                    }), lobby_id)
 
             elif action['type'] == 'start_game':
-                game, error = game_service.start_game(lobby_id)
+                game, error = game_service.start_game(lobby_id, player_name)
                 if game:
                     await manager.broadcast_to_lobby(json.dumps({
                         "type": "game_started",
@@ -53,6 +76,7 @@ async def websocket_endpoint(websocket: WebSocket, lobby_id: str, player_name: s
                 else:
                     await manager.send_personal_message(json.dumps({
                         "type": "error",
+                        "logging": 2,
                         "message": f"Cannot start game: {error}"
                     }), lobby_id, player_name)
 
@@ -76,6 +100,7 @@ async def websocket_endpoint(websocket: WebSocket, lobby_id: str, player_name: s
                 else:
                     await manager.send_personal_message(json.dumps({
                         "type": "error",
+                        "logging": 3,
                         "message": data
                     }), lobby_id, player_name)
 
@@ -118,4 +143,5 @@ if __name__ == "__main__":
     import uvicorn
 
     logger.info("Starting server...")
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="debug")
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="debug",
+                timeout_keep_alive=120, ws_ping_interval=20, ws_ping_timeout=20)
